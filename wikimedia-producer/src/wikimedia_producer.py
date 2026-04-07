@@ -1,4 +1,4 @@
-#! /home/shawqi/Kafka/wikimedia-kafka/.venv/bin/python3.14
+#! ../.venv/bin/python3.14
 import asyncio
 import logging
 import sys

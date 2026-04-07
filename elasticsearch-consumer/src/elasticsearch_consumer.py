@@ -1,13 +1,15 @@
-#!/home/shawqi/Kafka/.venv/bin/python3.14
+#!../.venv/bin/python3.14
 import io
 import json
 import logging
 import sys
 import time
+
 import snappy
 from confluent_kafka import Consumer, KafkaException
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -29,44 +31,49 @@ conf = {
     "partition.assignment.strategy": "cooperative-sticky",
     # Optional: ensure your session timeout is high enough to handle the 2-phase shift
     "session.timeout.ms": 45000,
-    "enable.auto.commit": "false"
+    "enable.auto.commit": "false",
 }
 consumer = Consumer(conf)
 consumer.subscribe([topic])
 
 es = Elasticsearch("http://localhost:9200")
-index="wikimedia"
+index = "wikimedia"
+
 
 def recceive_report(records):
     if records is None:
         logger.info(f"Consumer, No messages waiting...")
         time.sleep(3)
     else:
-        bulk_json=[]
+        bulk_json = []
         for record in records:
             if record.error():
                 if record.error().code() == "KafkaError._PARTITION_EOF":
                     continue
                 else:
-                    logger.error(f"Consumer message received error!: {record.error().code()}")
+                    logger.error(
+                        f"Consumer message received error!: {record.error().code()}"
+                    )
                     break
             if not (record.value() is None and record.value() == ""):
                 lines = record.value().splitlines()
                 for line in lines:
-                    try: 
+                    try:
                         line_utf8 = line.decode("utf8")
                         try:
                             if line_utf8 is not None and line_utf8.startswith("data: "):
                                 data = line_utf8.replace("data: ", "").strip()
                                 json_data = json.loads(data)
                                 document_id = json_data["meta"]["id"]
-                                bulk_json.append({
-                                    "_index":index, 
-                                    "_id": document_id,
-                                    "source": json_data
-                                    })
-                                #bulk_json.append(json_data)
-                                #es.index(index="wikimedia", document=json_data, id=document_id)
+                                bulk_json.append(
+                                    {
+                                        "_index": index,
+                                        "_id": document_id,
+                                        "source": json_data,
+                                    }
+                                )
+                                # bulk_json.append(json_data)
+                                # es.index(index="wikimedia", document=json_data, id=document_id)
                         except Exception as e:
                             with open("./DLQ.txt", "+a") as dlq:
                                 dlq.write(record.value().decode("utf8") + "\n")
@@ -78,7 +85,7 @@ def recceive_report(records):
                 )
         try:
             bulk(es, bulk_json)
-        except Exception as e :
+        except Exception as e:
             logger.error(f"Elasticsearch Error : {e}")
         return True
 
